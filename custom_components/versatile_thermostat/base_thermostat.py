@@ -1063,7 +1063,7 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
 
             return
 
-        # Remove eventual overpoering if we want to turn-off
+        # Remove eventual overpowering if we want to turn-off
         if hvac_mode == HVACMode.OFF and self.power_manager.is_overpowering_detected:
             await self.power_manager.set_overpowering(False)
 

@@ -34,7 +34,7 @@ from homeassistant.helpers.entity_component import EntityComponent
 from homeassistant.helpers.event import async_call_later
 from homeassistant.util.unit_conversion import TemperatureConverter
 
-from .const import UnknownEntity, overrides, get_safe_float
+from .const import UnknownEntity, overrides, get_safe_float, HVACMODE_SLEEP
 from .keep_alive import IntervalCaller
 
 _LOGGER = logging.getLogger(__name__)
@@ -1235,7 +1235,7 @@ class UnderlyingValveRegulation(UnderlyingValve):
         """Get the hvac_modes"""
         if not self.is_initialized:
             return []
-        return [HVACMode.OFF, HVACMode.HEAT]
+        return [HVACMode.HEAT, HVACMODE_SLEEP, HVACMode.OFF]
 
     @overrides
     async def start_cycle(

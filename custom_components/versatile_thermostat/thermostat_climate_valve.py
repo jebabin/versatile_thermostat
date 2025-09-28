@@ -280,6 +280,19 @@ class ThermostatOverClimateValve(ThermostatOverClimate):
             await under.set_valve_open_percent()
 
     @overrides
+    async def async_set_hvac_mode(self, hvac_mode: HVACMode, need_control_heating=True):
+        """Set new hvac mode"""
+        await super().async_set_hvac_mode(HVACMode.OFF if hvac_mode == HVACMODE_SLEEP else hvac_mode, need_control_heating)
+
+        self._hvac_mode = hvac_mode
+
+        # When turning off, we need to close the valve
+        if hvac_mode == HVACMODE_SLEEP:
+            self._valve_open_percent = 100
+            for under in self._underlyings_valve_regulation:
+                await under.set_valve_open_percent()
+
+    @overrides
     def build_hvac_list(self) -> list[HVACMode]:
         """Build the hvac list depending on ac_mode"""
         return [HVACMode.HEAT, HVACMODE_SLEEP, HVACMode.OFF]

@@ -657,3 +657,133 @@ async def test_over_climate_valve_multi_min_opening_degrees(
         )
 
         assert vtherm.nb_device_actives == 0
+
+
+@pytest.mark.parametrize("expected_lingering_tasks", [True])
+@pytest.mark.parametrize("expected_lingering_timers", [True])
+async def test_over_climate_valve_hvacmode_sleep(hass: HomeAssistant, skip_hass_states_get):
+    """Test the HVAMODE_SLEEP of a thermostat_over_climate type"""
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="TheOverClimateMockName",
+        unique_id="uniqueId",
+        data={
+            CONF_NAME: "TheOverClimateMockName",
+            CONF_TEMP_SENSOR: "sensor.mock_temp_sensor",
+            CONF_CYCLE_MIN: 5,
+            CONF_DEVICE_POWER: 1,
+            CONF_USE_MAIN_CENTRAL_CONFIG: False,
+            CONF_USE_CENTRAL_MODE: False,
+            CONF_THERMOSTAT_TYPE: CONF_THERMOSTAT_CLIMATE,
+            CONF_EXTERNAL_TEMP_SENSOR: "sensor.mock_ext_temp_sensor",
+            CONF_TEMP_MIN: 15,
+            CONF_TEMP_MAX: 30,
+            CONF_STEP_TEMPERATURE: 0.1,
+            CONF_UNDERLYING_LIST: ["climate.mock_climate"],
+            CONF_AC_MODE: True,
+            CONF_AUTO_REGULATION_MODE: CONF_AUTO_REGULATION_VALVE,
+            CONF_AUTO_REGULATION_DTEMP: 0.5,
+            CONF_AUTO_REGULATION_PERIOD_MIN: 2,
+            CONF_AUTO_FAN_MODE: CONF_AUTO_FAN_HIGH,
+            CONF_AUTO_REGULATION_USE_DEVICE_TEMP: False,
+            CONF_PROP_FUNCTION: PROPORTIONAL_FUNCTION_TPI,
+            CONF_TPI_COEF_INT: 0.3,
+            CONF_TPI_COEF_EXT: 0.1,
+            CONF_TPI_THRESHOLD_LOW: 0.0,
+            CONF_TPI_THRESHOLD_HIGH: 0.0,
+            CONF_OPENING_DEGREE_LIST: ["number.mock_opening_degree"],
+            CONF_CLOSING_DEGREE_LIST: ["number.mock_closing_degree"],
+            CONF_OFFSET_CALIBRATION_LIST: ["number.mock_offset_calibration"],
+        }
+        | MOCK_DEFAULT_FEATURE_CONFIG
+        | MOCK_DEFAULT_CENTRAL_CONFIG
+        | MOCK_ADVANCED_CONFIG,
+    )
+
+    fake_underlying_climate = MockClimate(hass, "mockUniqueId", "MockClimateName", {})
+
+    # 1. initialize the VTherm
+    tz = get_tz(hass)  # pylint: disable=invalid-name
+    now: datetime = datetime.now(tz=tz)
+
+    vtherm: ThermostatOverClimateValve = await create_thermostat(hass, entry, "climate.theoverclimatemockname")
+
+    assert vtherm
+    vtherm._set_now(now)
+    assert isinstance(vtherm, ThermostatOverClimateValve)
+
+    assert vtherm.name == "TheOverClimateMockName"
+    assert vtherm.is_over_climate is True
+    assert vtherm.have_valve_regulation is True
+    assert vtherm.hvac_modes == [HVACMode.HEAT, HVACMODE_SLEEP, HVACMode.OFF]
+    assert vtherm.hvac_action is HVACAction.OFF
+    assert vtherm.hvac_mode is HVACMode.OFF
+    assert vtherm.valve_open_percent == 0
+
+    # initialize the temps
+    await set_all_climate_preset_temp(hass, vtherm, None, "theoverclimatemockname")
+
+    await send_temperature_change_event(vtherm, 18, now, True)
+    await send_ext_temperature_change_event(vtherm, 18, now, True)
+
+    # 1. Starts heating slowly (18 vs 19)
+    now = now + timedelta(minutes=1)
+    vtherm._set_now(now)
+
+    await vtherm.async_set_hvac_mode(HVACMode.HEAT)
+    # fmt: off
+    with patch("homeassistant.core.ServiceRegistry.async_call") as mock_service_call:
+    # fmt: on
+        now = now + timedelta(minutes=2) # avoid temporal filter
+        vtherm._set_now(now)
+
+        await vtherm.async_set_preset_mode(PRESET_COMFORT)
+        await wait_for_local_condition(hass, lambda _: vtherm.hvac_mode == HVACMode.HEAT)
+
+        assert vtherm.preset_mode is PRESET_COMFORT
+        assert vtherm.target_temperature == 19
+        assert vtherm.current_temperature == 18
+        assert vtherm.valve_open_percent == 40 # 0.3*1 + 0.1*1
+
+
+        assert mock_service_call.call_count == 4
+        mock_service_call.assert_has_calls(
+            [
+                call('climate', 'set_temperature', {'entity_id': 'climate.mock_climate', 'temperature': 19.0}),
+                call(domain='number', service='set_value', service_data={'value': 40}, target={'entity_id': 'number.mock_opening_degree'}),
+                call(domain='number', service='set_value', service_data={'value': 60}, target={'entity_id': 'number.mock_closing_degree'}),
+                # 3 = 18 (room) - 15 (current of underlying) + 0 (current offset)
+                call(domain='number', service='set_value', service_data={'value': 3.0}, target={'entity_id': 'number.mock_offset_calibration'})
+            ]
+        )
+
+    # 2. set hvac_mode to SLEEP -> should turn off the VTherm and set the valve opening to 100%
+    now = now + timedelta(minutes=2)
+    vtherm._set_now(now)
+    # fmt: off
+    with patch("homeassistant.core.ServiceRegistry.async_call") as mock_service_call:
+    # fmt: on
+        await vtherm.async_set_hvac_mode(HVACMODE_SLEEP)
+        await wait_for_local_condition(hass, lambda _: vtherm.hvac_mode == HVACMODE_SLEEP)
+
+        assert vtherm.hvac_mode is HVACMODE_SLEEP
+        assert vtherm.preset_mode is PRESET_COMFORT # no change
+        assert vtherm.target_temperature == 19 # no change
+        assert vtherm.current_temperature == 18
+        assert vtherm.valve_open_percent == 100 # should be 100%
+
+        assert mock_service_call.call_count == 3
+        mock_service_call.assert_has_calls(
+            [
+                call('climate', 'set_temperature', {'entity_id': 'climate.mock_climate', 'temperature': 17.0}),
+                call(domain='number', service='set_value', service_data={'value': 0}, target={'entity_id': 'number.mock_opening_degree'}),
+                call(domain='number', service='set_value', service_data={'value': 100}, target={'entity_id': 'number.mock_closing_degree'}),
+            ]
+        )
+
+        assert vtherm.hvac_action is HVACAction.OFF
+        assert vtherm.is_device_active is False
+        assert vtherm.nb_device_actives == 0
+
+    await hass.async_block_till_done()
