@@ -279,6 +279,11 @@ class ThermostatOverClimateValve(ThermostatOverClimate):
         for under in self._underlyings_valve_regulation:
             await under.set_valve_open_percent()
 
+    @overrides
+    def build_hvac_list(self) -> list[HVACMode]:
+        """Build the hvac list depending on ac_mode"""
+        return [HVACMode.HEAT, HVACMODE_SLEEP, HVACMode.OFF]
+
     @property
     def have_valve_regulation(self) -> bool:
         """True if the Thermostat is regulated by valve"""

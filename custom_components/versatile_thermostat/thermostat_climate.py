@@ -918,13 +918,16 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
         """Check if the ThermostatOverClimate is regulated"""
         return self.auto_regulation_mode != CONF_AUTO_REGULATION_NONE
 
-    @property
-    def hvac_modes(self) -> list[HVACMode]:
-        """List of available operation modes."""
+    @overrides
+    def build_hvac_list(self) -> list[HVACMode]:
+        """Build the hvac list depending on ac_mode"""
         if self.underlying_entity(0):
             return self.underlying_entity(0).hvac_modes
         else:
-            return super.hvac_modes
+            if self._ac_mode:
+                return [HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF]
+            else:
+                return [HVACMode.HEAT, HVACMode.OFF]
 
     @property
     def mean_cycle_power(self) -> float | None:

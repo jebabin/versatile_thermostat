@@ -415,6 +415,7 @@ CENTRAL_MODES = [
     CENTRAL_MODE_FROST_PROTECTION,
 ]
 
+HVACMODE_SLEEP = "sleep"
 
 #  A special regulation parameter suggested by @Maia here: https://github.com/jmcollin78/versatile_thermostat/discussions/154
 class RegulationParamSlow:

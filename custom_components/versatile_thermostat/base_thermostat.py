@@ -340,12 +340,7 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
             self._tpi_threshold_low = 0.0
             self._tpi_threshold_high = 0.0
 
-        if self._ac_mode:
-            # Added by https://github.com/jmcollin78/versatile_thermostat/pull/144
-            # Some over_switch can do both heating and cooling
-            self._hvac_list = [HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF]
-        else:
-            self._hvac_list = [HVACMode.HEAT, HVACMode.OFF]
+        self._hvac_list = self.build_hvac_list()
 
         self._unit = self._hass.config.units.temperature_unit
         # Will be restored if possible
@@ -682,6 +677,13 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
 
     def __str__(self) -> str:
         return f"VersatileThermostat-{self.name}"
+
+    def build_hvac_list(self) -> list[HVACMode]:
+        """Build the hvac list depending on ac_mode"""
+        if self._ac_mode:
+            return [HVACMode.HEAT, HVACMode.COOL, HVACMode.OFF]
+        else:
+            return [HVACMode.HEAT, HVACMode.OFF]
 
     @property
     def is_over_climate(self) -> bool:

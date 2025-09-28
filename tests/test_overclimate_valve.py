@@ -100,6 +100,8 @@ async def test_over_climate_valve_mono(hass: HomeAssistant, skip_hass_states_get
         assert vtherm.is_over_climate is True
         assert vtherm.have_valve_regulation is True
 
+        assert vtherm.hvac_modes == [HVACMode.HEAT, HVACMODE_SLEEP, HVACMode.OFF]
+
         assert vtherm.hvac_action is HVACAction.OFF
         assert vtherm.hvac_mode is HVACMode.OFF
         assert vtherm.target_temperature == vtherm.min_temp
