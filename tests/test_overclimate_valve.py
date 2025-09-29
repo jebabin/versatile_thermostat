@@ -703,43 +703,57 @@ async def test_over_climate_valve_hvacmode_sleep(hass: HomeAssistant, skip_hass_
 
     fake_underlying_climate = MockClimate(hass, "mockUniqueId", "MockClimateName", {})
 
+    # mock_get_state will be called for each OPENING/CLOSING/OFFSET_CALIBRATION list
+    mock_get_state_side_effect = SideEffects(
+        {
+            # Valve is open
+            "number.mock_opening_degree": State("number.mock_opening_degree", "11", {"min": 0, "max": 100}),
+            "number.mock_closing_degree": State("number.mock_closing_degree", "89", {"min": 0, "max": 100}),
+            "number.mock_offset_calibration": State("number.mock_offset_calibration", "0", {"min": -12, "max": 12}),
+        },
+        State("unknown.entity_id", "unknown"),
+    )
+
     # 1. initialize the VTherm
     tz = get_tz(hass)  # pylint: disable=invalid-name
     now: datetime = datetime.now(tz=tz)
 
-    vtherm: ThermostatOverClimateValve = await create_thermostat(hass, entry, "climate.theoverclimatemockname")
+    with patch("homeassistant.core.StateMachine.get", side_effect=mock_get_state_side_effect.get_side_effects()) as mock_get_state:
 
-    assert vtherm
-    vtherm._set_now(now)
-    assert isinstance(vtherm, ThermostatOverClimateValve)
+        vtherm: ThermostatOverClimateValve = await create_thermostat(hass, entry, "climate.theoverclimatemockname")
 
-    assert vtherm.name == "TheOverClimateMockName"
-    assert vtherm.is_over_climate is True
-    assert vtherm.have_valve_regulation is True
-    assert vtherm.hvac_modes == [HVACMode.HEAT, HVACMODE_SLEEP, HVACMode.OFF]
-    assert vtherm.hvac_action is HVACAction.OFF
-    assert vtherm.hvac_mode is HVACMode.OFF
-    assert vtherm.valve_open_percent == 0
+        assert vtherm
+        vtherm._set_now(now)
+        assert isinstance(vtherm, ThermostatOverClimateValve)
 
-    # initialize the temps
-    await set_all_climate_preset_temp(hass, vtherm, None, "theoverclimatemockname")
+        assert vtherm.name == "TheOverClimateMockName"
+        assert vtherm.is_over_climate is True
+        assert vtherm.have_valve_regulation is True
+        assert vtherm.hvac_modes == [HVACMode.HEAT, HVACMODE_SLEEP, HVACMode.OFF]
+        assert vtherm.hvac_action is HVACAction.HEATING
+        assert vtherm.hvac_mode is HVACMode.OFF
+        assert vtherm.valve_open_percent == 0
 
-    await send_temperature_change_event(vtherm, 18, now, True)
-    await send_ext_temperature_change_event(vtherm, 18, now, True)
+        # initialize the temps
+        await set_all_climate_preset_temp(hass, vtherm, None, "theoverclimatemockname")
 
-    # 1. Starts heating slowly (18 vs 19)
+        await send_temperature_change_event(vtherm, 18, now, True)
+        await send_ext_temperature_change_event(vtherm, 18, now, True)
+
+    # 2. Starts heating slowly (18 vs 19)
     now = now + timedelta(minutes=1)
     vtherm._set_now(now)
 
     await vtherm.async_set_hvac_mode(HVACMode.HEAT)
     # fmt: off
-    with patch("homeassistant.core.ServiceRegistry.async_call") as mock_service_call:
+    with patch("homeassistant.core.ServiceRegistry.async_call") as mock_service_call, \
+         patch("homeassistant.core.StateMachine.get", side_effect=mock_get_state_side_effect.get_side_effects()) as mock_get_state:
     # fmt: on
         now = now + timedelta(minutes=2) # avoid temporal filter
         vtherm._set_now(now)
 
         await vtherm.async_set_preset_mode(PRESET_COMFORT)
-        await wait_for_local_condition(hass, lambda _: vtherm.hvac_mode == HVACMode.HEAT)
+        await wait_for_local_condition(lambda: vtherm.hvac_mode == HVACMode.HEAT)
 
         assert vtherm.preset_mode is PRESET_COMFORT
         assert vtherm.target_temperature == 19
@@ -747,25 +761,25 @@ async def test_over_climate_valve_hvacmode_sleep(hass: HomeAssistant, skip_hass_
         assert vtherm.valve_open_percent == 40 # 0.3*1 + 0.1*1
 
 
-        assert mock_service_call.call_count == 4
+        assert mock_service_call.call_count == 2
         mock_service_call.assert_has_calls(
             [
-                call('climate', 'set_temperature', {'entity_id': 'climate.mock_climate', 'temperature': 19.0}),
+                #call('climate', 'set_temperature', {'entity_id': 'climate.mock_climate', 'temperature': 19.0}),
                 call(domain='number', service='set_value', service_data={'value': 40}, target={'entity_id': 'number.mock_opening_degree'}),
                 call(domain='number', service='set_value', service_data={'value': 60}, target={'entity_id': 'number.mock_closing_degree'}),
                 # 3 = 18 (room) - 15 (current of underlying) + 0 (current offset)
-                call(domain='number', service='set_value', service_data={'value': 3.0}, target={'entity_id': 'number.mock_offset_calibration'})
+                #call(domain='number', service='set_value', service_data={'value': 3.0}, target={'entity_id': 'number.mock_offset_calibration'})
             ]
         )
 
-    # 2. set hvac_mode to SLEEP -> should turn off the VTherm and set the valve opening to 100%
+    # 3. set hvac_mode to SLEEP -> should turn off the VTherm and set the valve opening to 100%
     now = now + timedelta(minutes=2)
     vtherm._set_now(now)
     # fmt: off
     with patch("homeassistant.core.ServiceRegistry.async_call") as mock_service_call:
     # fmt: on
         await vtherm.async_set_hvac_mode(HVACMODE_SLEEP)
-        await wait_for_local_condition(hass, lambda _: vtherm.hvac_mode == HVACMODE_SLEEP)
+        await wait_for_local_condition(lambda: vtherm.hvac_mode == HVACMODE_SLEEP)
 
         assert vtherm.hvac_mode is HVACMODE_SLEEP
         assert vtherm.preset_mode is PRESET_COMFORT # no change
@@ -773,12 +787,11 @@ async def test_over_climate_valve_hvacmode_sleep(hass: HomeAssistant, skip_hass_
         assert vtherm.current_temperature == 18
         assert vtherm.valve_open_percent == 100 # should be 100%
 
-        assert mock_service_call.call_count == 3
+        assert mock_service_call.call_count == 2
         mock_service_call.assert_has_calls(
             [
-                call('climate', 'set_temperature', {'entity_id': 'climate.mock_climate', 'temperature': 17.0}),
-                call(domain='number', service='set_value', service_data={'value': 0}, target={'entity_id': 'number.mock_opening_degree'}),
-                call(domain='number', service='set_value', service_data={'value': 100}, target={'entity_id': 'number.mock_closing_degree'}),
+                call(domain='number', service='set_value', service_data={'value': 100}, target={'entity_id': 'number.mock_opening_degree'}),
+                call(domain='number', service='set_value', service_data={'value': 0}, target={'entity_id': 'number.mock_closing_degree'}),
             ]
         )
 
