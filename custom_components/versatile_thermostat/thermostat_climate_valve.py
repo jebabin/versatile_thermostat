@@ -347,3 +347,13 @@ class ThermostatOverClimateValve(ThermostatOverClimate):
     async def service_set_auto_regulation_mode(self, auto_regulation_mode: str):
         """This should not be possible in valve regulation mode"""
         return
+
+    @overrides
+    async def service_set_hvac_mode_sleep(self):
+        """Set the hvac_mode to SLEEP mode (valid only for over_climate with valve regulation):
+        service: versatile_thermostat.set_hvac_mode_sleep
+        target:
+            entity_id: climate.thermostat_1
+        """
+        _LOGGER.info("%s - Calling service_set_hva_mode_sleep", self)
+        await self.async_set_hvac_mode(HVACMODE_SLEEP)

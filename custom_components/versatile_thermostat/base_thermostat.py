@@ -1822,7 +1822,7 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
             await self.async_set_preset_mode_internal(preset.rstrip(PRESET_AC_SUFFIX), force=True)
             await self.async_control_heating(force=True)
 
-    async def SERVICE_SET_SAFETY(
+    async def service_set_safety(
         self,
         delay_min: int | None,
         min_on_percent: float | None,
@@ -1875,6 +1875,15 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
         )
         if await self._window_manager.set_window_bypass(window_bypass):
             self.update_custom_attributes()
+
+    async def service_set_hvac_mode_sleep(self):
+        """Set the hvac_mode to SLEEP mode (valid only for over_climate with valve regulation):
+        service: versatile_thermostat.set_hvac_mode_sleep
+        target:
+            entity_id: climate.thermostat_1
+        """
+        _LOGGER.info("%s - Calling service_set_hva_mode_sleep", self)
+        raise NotImplementedError("service_set_hva_mode_sleep not implemented for this kind of thermostat. Only for over_climate with valve regulation is supported")
 
     def send_event(self, event_type: EventType, data: dict):
         """Send an event"""

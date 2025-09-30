@@ -764,7 +764,6 @@ async def test_over_climate_valve_hvacmode_sleep(hass: HomeAssistant, skip_hass_
         assert mock_service_call.call_count == 2
         mock_service_call.assert_has_calls(
             [
-                #call('climate', 'set_temperature', {'entity_id': 'climate.mock_climate', 'temperature': 19.0}),
                 call(domain='number', service='set_value', service_data={'value': 40}, target={'entity_id': 'number.mock_opening_degree'}),
                 call(domain='number', service='set_value', service_data={'value': 60}, target={'entity_id': 'number.mock_closing_degree'}),
                 # 3 = 18 (room) - 15 (current of underlying) + 0 (current offset)
