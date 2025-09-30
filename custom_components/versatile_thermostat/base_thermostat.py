@@ -1002,6 +1002,11 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
         window detection or auto-start-stop"""
         return self._hvac_off_reason
 
+    @property
+    def is_sleeping(self) -> bool:
+        """True if the thermostat is in sleep mode. Only for over_climate with valve regulation"""
+        raise NotImplementedError("is_sleeping not implemented for this kind of thermostat. Only for over_climate with valve regulation is supported")
+
     def underlying_entity_id(self, index=0) -> str | None:
         """The climate_entity_id. Added for retrocompatibility reason"""
         if index < self.nb_underlying_entities:

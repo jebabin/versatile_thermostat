@@ -733,6 +733,7 @@ async def test_over_climate_valve_hvacmode_sleep(hass: HomeAssistant, skip_hass_
         assert vtherm.hvac_action is HVACAction.HEATING
         assert vtherm.hvac_mode is HVACMode.OFF
         assert vtherm.valve_open_percent == 0
+        assert vtherm.is_sleeping is False
 
         # initialize the temps
         await set_all_climate_preset_temp(hass, vtherm, None, "theoverclimatemockname")
@@ -759,7 +760,7 @@ async def test_over_climate_valve_hvacmode_sleep(hass: HomeAssistant, skip_hass_
         assert vtherm.target_temperature == 19
         assert vtherm.current_temperature == 18
         assert vtherm.valve_open_percent == 40 # 0.3*1 + 0.1*1
-
+        assert vtherm.is_sleeping is False
 
         assert mock_service_call.call_count == 2
         mock_service_call.assert_has_calls(
@@ -778,13 +779,14 @@ async def test_over_climate_valve_hvacmode_sleep(hass: HomeAssistant, skip_hass_
     with patch("homeassistant.core.ServiceRegistry.async_call") as mock_service_call:
     # fmt: on
         await vtherm.async_set_hvac_mode(HVACMODE_SLEEP)
-        await wait_for_local_condition(lambda: vtherm.hvac_mode == HVACMODE_SLEEP)
+        await wait_for_local_condition(lambda: vtherm.hvac_mode == HVACMode.OFF)
 
-        assert vtherm.hvac_mode is HVACMODE_SLEEP
+        assert vtherm.hvac_mode is HVACMode.OFF
         assert vtherm.preset_mode is PRESET_COMFORT # no change
         assert vtherm.target_temperature == 19 # no change
         assert vtherm.current_temperature == 18
         assert vtherm.valve_open_percent == 100 # should be 100%
+        assert vtherm.is_sleeping is True
 
         assert mock_service_call.call_count == 2
         mock_service_call.assert_has_calls(
