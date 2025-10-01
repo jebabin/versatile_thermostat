@@ -4,7 +4,7 @@
 import logging
 from datetime import datetime
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, State
 from homeassistant.components.climate import HVACMode, HVACAction
 
 from .underlyings import UnderlyingValveRegulation
@@ -38,7 +38,6 @@ class ThermostatOverClimateValve(ThermostatOverClimate):
                 "tpi_coef_ext",
                 "power_percent",
                 "min_opening_degrees",
-                "is_sleeping",
             }
         )
     )
@@ -122,6 +121,15 @@ class ThermostatOverClimateValve(ThermostatOverClimate):
                 ),
             )
             self._underlyings_valve_regulation.append(under)
+
+    @overrides
+    def restore_specific_previous_state(self, old_state: State):
+        """Restore my specific attributes from previous state"""
+        super().restore_specific_previous_state(old_state)
+
+        self._is_sleeping = self.hvac_mode == HVACMode.OFF and old_state.attributes.get("is_sleeping", False)
+        if self._is_sleeping:
+            self.set_hvac_off_reason(HVAC_OFF_REASON_SLEEP_MODE)
 
     @overrides
     def update_custom_attributes(self):
@@ -287,15 +295,14 @@ class ThermostatOverClimateValve(ThermostatOverClimate):
     async def async_set_hvac_mode(self, hvac_mode: HVACMode, need_control_heating=True):
         """Set new hvac mode"""
         _LOGGER.info("%s - Calling async_set_hvac_mode to %s", self, hvac_mode)
+
         if hvac_mode == HVACMODE_SLEEP:
             _LOGGER.info("%s - Setting hvac_mode to SLEEP", self)
             self._is_sleeping = True
             hvac_mode = HVACMode.OFF
+
         else:
             self._is_sleeping = False
-
-        # set hvac mode save the state at the end
-        await super().async_set_hvac_mode(hvac_mode, need_control_heating)
 
         # When turning off, we need to close the valve
         if self._is_sleeping:
@@ -304,6 +311,9 @@ class ThermostatOverClimateValve(ThermostatOverClimate):
                 await under.set_valve_open_percent()
             self.update_custom_attributes()
             self.async_write_ha_state()
+
+        # set hvac mode save the state at the end
+        await super().async_set_hvac_mode(hvac_mode, need_control_heating)
 
     @overrides
     def build_hvac_list(self) -> list[HVACMode]:

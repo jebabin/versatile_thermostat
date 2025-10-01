@@ -1005,7 +1005,7 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
     @property
     def is_sleeping(self) -> bool:
         """True if the thermostat is in sleep mode. Only for over_climate with valve regulation"""
-        raise NotImplementedError("is_sleeping not implemented for this kind of thermostat. Only for over_climate with valve regulation is supported")
+        return False
 
     def underlying_entity_id(self, index=0) -> str | None:
         """The climate_entity_id. Added for retrocompatibility reason"""
@@ -1056,17 +1056,16 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
 
         # If we already are in OFF, the manual OFF should just
         # overwrite the reason and saved_hvac_mode
-        if self._hvac_mode == HVACMode.OFF and hvac_mode == HVACMode.OFF:
-            _LOGGER.info(
-                "%s - already in OFF. Change the reason to MANUAL "
-                "and erase the saved_havc_mode"
-            )
-            self._hvac_off_reason = HVAC_OFF_REASON_MANUAL
-            self._saved_hvac_mode = HVACMode.OFF
+        if hvac_mode == HVACMode.OFF:
+            self._hvac_off_reason = HVAC_OFF_REASON_MANUAL if not self.is_sleeping else HVAC_OFF_REASON_SLEEP_MODE
 
-            save_state()
+            if self._hvac_mode == HVACMode.OFF:
+                _LOGGER.info("%s - already in OFF. Change the reason to MANUAL " "and erase the saved_havc_mode")
+                self._saved_hvac_mode = HVACMode.OFF
 
-            return
+                save_state()
+
+                return
 
         # Remove eventual overpowering if we want to turn-off
         if hvac_mode == HVACMode.OFF and self.power_manager.is_overpowering_detected:

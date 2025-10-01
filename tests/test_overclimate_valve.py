@@ -787,6 +787,7 @@ async def test_over_climate_valve_hvacmode_sleep(hass: HomeAssistant, skip_hass_
         assert vtherm.current_temperature == 18
         assert vtherm.valve_open_percent == 100 # should be 100%
         assert vtherm.is_sleeping is True
+        assert vtherm.hvac_off_reason == HVAC_OFF_REASON_SLEEP_MODE
 
         assert mock_service_call.call_count == 2
         mock_service_call.assert_has_calls(
@@ -799,5 +800,34 @@ async def test_over_climate_valve_hvacmode_sleep(hass: HomeAssistant, skip_hass_
         assert vtherm.hvac_action is HVACAction.OFF
         assert vtherm.is_device_active is False
         assert vtherm.nb_device_actives == 0
+
+    # 4. set hvac_mode to HEAT -> should turn on the VTherm and set the valve opening to something < 100%
+    now = now + timedelta(minutes=2)
+    vtherm._set_now(now)
+    # fmt: off
+    with patch("homeassistant.core.ServiceRegistry.async_call") as mock_service_call:
+    # fmt: on
+        await vtherm.async_set_hvac_mode(HVACMode.HEAT)
+        await wait_for_local_condition(lambda: vtherm.hvac_mode == HVACMode.HEAT)
+
+        assert vtherm.hvac_mode is HVACMode.HEAT
+        assert vtherm.preset_mode is PRESET_COMFORT # no change
+        assert vtherm.target_temperature == 19 # no change
+        assert vtherm.current_temperature == 18
+        assert vtherm.valve_open_percent == 40 # should be 40% (as before)
+        assert vtherm.is_sleeping is False
+        assert vtherm.hvac_off_reason is None
+
+        assert mock_service_call.call_count == 2
+        mock_service_call.assert_has_calls(
+            [
+                call(domain='number', service='set_value', service_data={'value': 40}, target={'entity_id': 'number.mock_opening_degree'}),
+                call(domain='number', service='set_value', service_data={'value': 60}, target={'entity_id': 'number.mock_closing_degree'}),
+            ]
+        )
+
+        assert vtherm.hvac_action is HVACAction.HEATING
+        assert vtherm.is_device_active is True
+        assert vtherm.nb_device_actives == 1
 
     await hass.async_block_till_done()
