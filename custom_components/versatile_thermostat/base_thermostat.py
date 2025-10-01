@@ -1056,16 +1056,14 @@ class BaseThermostat(ClimateEntity, RestoreEntity, Generic[T]):
 
         # If we already are in OFF, the manual OFF should just
         # overwrite the reason and saved_hvac_mode
-        if hvac_mode == HVACMode.OFF:
+        if self._hvac_mode == HVACMode.OFF and hvac_mode == HVACMode.OFF:
+            _LOGGER.info("%s - already in OFF. Change the reason to MANUAL " "and erase the saved_havc_mode")
             self._hvac_off_reason = HVAC_OFF_REASON_MANUAL if not self.is_sleeping else HVAC_OFF_REASON_SLEEP_MODE
+            self._saved_hvac_mode = HVACMode.OFF
 
-            if self._hvac_mode == HVACMode.OFF:
-                _LOGGER.info("%s - already in OFF. Change the reason to MANUAL " "and erase the saved_havc_mode")
-                self._saved_hvac_mode = HVACMode.OFF
+            save_state()
 
-                save_state()
-
-                return
+            return
 
         # Remove eventual overpowering if we want to turn-off
         if hvac_mode == HVACMode.OFF and self.power_manager.is_overpowering_detected:

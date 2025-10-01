@@ -919,6 +919,7 @@ class ThermostatOverClimate(BaseThermostat[UnderlyingClimate]):
         return self.auto_regulation_mode != CONF_AUTO_REGULATION_NONE
 
     @overrides
+    # TODO ne fonctionne pas car underlying_entity n'est pas initialisé au moment de l'appel
     def build_hvac_list(self) -> list[HVACMode]:
         """Build the hvac list depending on ac_mode"""
         if self.underlying_entity(0):

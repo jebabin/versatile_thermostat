@@ -300,7 +300,7 @@ class ThermostatOverClimateValve(ThermostatOverClimate):
             _LOGGER.info("%s - Setting hvac_mode to SLEEP", self)
             self._is_sleeping = True
             hvac_mode = HVACMode.OFF
-
+            self.set_hvac_off_reason(HVAC_OFF_REASON_SLEEP_MODE)
         else:
             self._is_sleeping = False
 
